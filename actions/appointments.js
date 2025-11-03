@@ -1,4 +1,6 @@
 "use server";
+import path from "path";
+import fs from "fs";
 
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
@@ -7,6 +9,7 @@ import { deductCreditsForAppointment } from "@/actions/credits";
 import { Vonage } from "@vonage/server-sdk";
 import { addDays, addMinutes, format, isBefore, endOfDay } from "date-fns";
 import { Auth } from "@vonage/auth";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 
 // Initialize Vonage Video API client
 const credentials = new Auth({
@@ -21,108 +24,67 @@ const vonage = new Vonage(credentials, options);
  */
 export async function bookAppointment(formData) {
   const { userId } = await auth();
-
-  if (!userId) {
-    throw new Error("Unauthorized");
-  }
+  if (!userId) throw new Error("Unauthorized");
 
   try {
-    // Get the patient user
     const patient = await db.user.findUnique({
-      where: {
-        clerkUserId: userId,
-        role: "PATIENT",
-      },
+      where: { clerkUserId: userId, role: "PATIENT" },
     });
+    if (!patient) throw new Error("Patient not found");
 
-    if (!patient) {
-      throw new Error("Patient not found");
-    }
-
-    // Parse form data
     const doctorId = formData.get("doctorId");
     const startTime = new Date(formData.get("startTime"));
     const endTime = new Date(formData.get("endTime"));
     const patientDescription = formData.get("description") || null;
+    const appointmentType = formData.get("appointmentType") || "offline";
+    const medicalForm = JSON.parse(formData.get("medicalForm") || "null"); 
 
-    // Validate input
-    if (!doctorId || !startTime || !endTime) {
+    if (!doctorId || !startTime || !endTime)
       throw new Error("Doctor, start time, and end time are required");
-    }
 
-    // Check if the doctor exists and is verified
     const doctor = await db.user.findUnique({
-      where: {
-        id: doctorId,
-        role: "DOCTOR",
-        verificationStatus: "VERIFIED",
-      },
+      where: { id: doctorId, role: "DOCTOR", verificationStatus: "VERIFIED" },
     });
+    if (!doctor) throw new Error("Doctor not found or not verified");
 
-    if (!doctor) {
-      throw new Error("Doctor not found or not verified");
-    }
-
-    // Check if the patient has enough credits (2 credits per appointment)
-    if (patient.credits < 2) {
+    if (patient.credits < 2)
       throw new Error("Insufficient credits to book an appointment");
-    }
 
-    // Check if the requested time slot is available
+    // Check overlapping slot
     const overlappingAppointment = await db.appointment.findFirst({
       where: {
-        doctorId: doctorId,
+        doctorId,
         status: "SCHEDULED",
         OR: [
-          {
-            // New appointment starts during an existing appointment
-            startTime: {
-              lte: startTime,
-            },
-            endTime: {
-              gt: startTime,
-            },
-          },
-          {
-            // New appointment ends during an existing appointment
-            startTime: {
-              lt: endTime,
-            },
-            endTime: {
-              gte: endTime,
-            },
-          },
-          {
-            // New appointment completely overlaps an existing appointment
-            startTime: {
-              gte: startTime,
-            },
-            endTime: {
-              lte: endTime,
-            },
-          },
+          { startTime: { lte: startTime }, endTime: { gt: startTime } },
+          { startTime: { lt: endTime }, endTime: { gte: endTime } },
+          { startTime: { gte: startTime }, endTime: { lte: endTime } },
         ],
       },
     });
-
-    if (overlappingAppointment) {
+    if (overlappingAppointment)
       throw new Error("This time slot is already booked");
-    }
 
-    // Create a new Vonage Video API session
-    const sessionId = await createVideoSession();
-
-    // Deduct credits from patient and add to doctor
+    // Deduct credits
     const { success, error } = await deductCreditsForAppointment(
       patient.id,
       doctor.id
     );
+    if (!success) throw new Error(error || "Failed to deduct credits");
 
-    if (!success) {
-      throw new Error(error || "Failed to deduct credits");
+    // Save uploaded report files (PDFs)
+    const reportFilesBase64 = JSON.parse(
+      formData.get("reportFilesBase64") || "[]"
+    );
+
+
+    const savedFiles = [];
+    for (const file of reportFilesBase64) {
+      if (!file.filename || !file.data) continue;
+      const fileUrl = await uploadToCloudinary(file.data, file.filename);
+  savedFiles.push(fileUrl);
     }
-
-    // Create the appointment with the video session ID
+    // ✅ Create Appointment
     const appointment = await db.appointment.create({
       data: {
         patientId: patient.id,
@@ -131,17 +93,41 @@ export async function bookAppointment(formData) {
         endTime,
         patientDescription,
         status: "SCHEDULED",
-        videoSessionId: sessionId, // Store the Vonage session ID
+        appointmentType,
+        reportFiles: savedFiles,
+        medicalForm,
       },
     });
 
+    // ✅ Save all form data in PatientData table
+    if (medicalForm) {
+      await db.patientData.create({
+        data: {
+          patientId: patient.id,
+          name: medicalForm.name,
+          gender: medicalForm.gender,
+          age: parseInt(medicalForm.age),
+          bloodGroup: medicalForm.bloodGroup,
+          symptoms: medicalForm.symptoms,
+          history: medicalForm.history,
+          ongoingTreatment: medicalForm.ongoingTreatment,
+          medications: medicalForm.medications,
+          allergies: medicalForm.allergies,
+          chronicConditions: medicalForm.chronicConditions,
+          reports: savedFiles, // all uploaded file URLs
+        },
+      });
+    }
+
     revalidatePath("/appointments");
-    return { success: true, appointment: appointment };
+    return { success: true, appointment };
   } catch (error) {
-    console.error("Failed to book appointment:", error);
-    throw new Error("Failed to book appointment:" + error.message);
+    console.error("❌ Failed to book appointment:", error);
+    throw new Error("Failed to book appointment: " + error.message);
   }
 }
+
+
 
 /**
  * Generate a Vonage Video API session

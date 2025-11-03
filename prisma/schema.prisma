@@ -12,7 +12,7 @@ datasource db {
 model User {
   id                String    @id @map("_id") @default(auto()) @db.ObjectId
   clerkUserId       String    @unique
-  email             String    @unique
+  email             String    
   name              String?
   imageUrl          String?
   role              UserRole  @default(UNASSIGNED)
@@ -31,6 +31,7 @@ model User {
   availabilities      Availability[]
   transactions        CreditTransaction[]
   payouts             Payout[]
+  patientRecords    PatientData[] 
 }
 
 enum UserRole {
@@ -72,18 +73,25 @@ model Appointment {
   startTime          DateTime
   endTime            DateTime
   status             AppointmentStatus @default(SCHEDULED)
+  appointmentType    String @default("offline")
+
   notes              String?
   patientDescription String?
-  
+
   videoSessionId     String?
   videoSessionToken  String?
-  
+
+  // New fields to store the detailed medical form (JSON) and uploaded report file paths
+  medicalForm        Json?
+  reportFiles        String[]
+
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@index([status, startTime])
   @@index([doctorId, startTime])
 }
+
 
 enum AppointmentStatus {
   SCHEDULED
@@ -125,6 +133,29 @@ model Payout {
   @@index([status, createdAt])
   @@index([doctorId, status])
 }
+
+
+model PatientData {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  patientId        String
+  name             String
+  gender           String
+  age              Int
+  bloodGroup       String
+  symptoms         String?
+  history          String?
+  ongoingTreatment String?
+  medications      String?
+  allergies        String?
+  chronicConditions String?
+
+  reports          String[]   // store uploaded PDF URLs
+  createdAt        DateTime   @default(now())
+
+  patient          User       @relation(fields: [patientId], references: [id])
+}
+
+
 
 enum PayoutStatus {
   PROCESSING
