@@ -77,7 +77,7 @@ model Appointment {
 
   notes              String?
   patientDescription String?
-
+  videoLink       String?
   videoSessionId     String?
   videoSessionToken  String?
 

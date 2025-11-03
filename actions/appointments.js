@@ -1,7 +1,7 @@
 "use server";
 import path from "path";
 import fs from "fs";
-
+import { generateMeetingLink } from "@/lib/generateMeetingLink";
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
@@ -98,6 +98,17 @@ export async function bookAppointment(formData) {
         medicalForm,
       },
     });
+
+
+    if (appointmentType === "virtual") {
+      const videoLink = generateMeetingLink(appointment.id);
+      await db.appointment.update({
+        where: { id: appointment.id },
+        data: { videoLink },
+      });
+      // attach to local appointment object (so returned object has link)
+      appointment.videoLink = videoLink;
+    }
 
     // ✅ Save all form data in PatientData table
     if (medicalForm) {

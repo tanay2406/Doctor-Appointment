@@ -411,34 +411,40 @@ export function AppointmentCard({
             )}
 
             {/* Join Video Call Button */}
-            {appointment.status === "SCHEDULED" && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium text-muted-foreground">
-                  Video Consultation
-                </h4>
-                <Button
-                  className="w-full bg-emerald-600 hover:bg-emerald-700"
-                  disabled={
-                    !isAppointmentActive() || action === "video" || tokenLoading
-                  }
-                  onClick={handleJoinVideoCall}
-                >
-                  {tokenLoading || action === "video" ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Preparing Video Call...
-                    </>
-                  ) : (
-                    <>
-                      <Video className="h-4 w-4 mr-2" />
-                      {isAppointmentActive()
-                        ? "Join Video Call"
-                        : "Video call will be available 30 minutes before appointment"}
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
+            {/* Video Consultation Section */}
+{appointment.status === "SCHEDULED" && appointment.appointmentType === "virtual" && (
+  <div className="space-y-2">
+    <h4 className="text-sm font-medium text-muted-foreground">
+      Video Consultation
+    </h4>
+
+    {appointment.videoLink ? (
+      // ✅ Show join link if available
+      <a
+        href={appointment.videoLink}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="w-full inline-flex items-center justify-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition-colors"
+      >
+        <Video className="h-4 w-4 mr-2" />
+        Join Video Call
+      </a>
+    ) : (
+      // ⚙️ Otherwise, show read-only link input
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Meeting Link</label>
+        <input
+          type="text"
+          value="Meeting link not available yet"
+          readOnly
+          className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed"
+        />
+      </div>
+    )}
+  </div>
+)}
+
+              
 
             {/* Doctor Notes (Doctor can view/edit, Patient can only view) */}
             <div className="space-y-2">
