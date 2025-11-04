@@ -1,0 +1,30 @@
+============================================================
+PATIENT MEDICAL RECORD
+============================================================
+
+BASIC INFORMATION:
+  Name: hcfhfvhjv
+  Patient ID: 690997ba17988f6194ddebc7
+  Age: 87
+  Gender: Female
+  Blood Group: H
+
+MEDICAL INFORMATION:
+  Current Symptoms: HVJHVJ
+  Medical History: JBGJG
+  Ongoing Treatment: DHGDHT
+  Current Medications: HGDYD
+  Allergies: JFUYF
+  Chronic Conditions: JGJG
+
+MEDICAL REPORTS:
+============================================================
+
+Report 1:
+  URL: https://res.cloudinary.com/dfvfq35ba/image/upload/v1762236732/patient_reports/delete%20thsi.jpg.jpg
+
+  Extracted Content:
+  [Error extracting text from image: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.]
+
+------------------------------------------------------------
+
